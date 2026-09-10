@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#203f36">
+  <meta name="description" content="Pioggia misurata dal radar attorno a Sassello: cumulate, età della pioggia e temperature, con archivio automatico.">
+  <title>Radar Sassello · Pioggia nel territorio</title>
+  <link rel="stylesheet" href="vendor/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="vendor/leaflet.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header>
+    <div class="identity"><span class="mark" aria-hidden="true">RS</span><div><h1>Radar Sassello</h1><p>OSSERVATORIO DELLA PIOGGIA</p></div></div>
+    <div class="header-meta"><span class="tag">SASSELLO + 25 KM</span><button id="refresh" type="button">Aggiorna ↻</button></div>
+  </header>
+  <main>
+    <section class="map-workspace" aria-label="Mappa della pioggia">
+      <div class="toolbar">
+        <div class="periods" role="group" aria-label="Periodo di accumulo"><button data-hours="24" aria-pressed="false">24 ore</button><button data-hours="72" aria-pressed="false">3 giorni</button><button class="active" data-hours="240" aria-pressed="true">10 giorni</button></div>
+        <label class="age-toggle"><input id="age" type="checkbox" checked> Mostra età della pioggia</label>
+      </div>
+      <div id="map" aria-label="Mappa interattiva: tocca una cella per i dettagli"></div>
+      <div class="map-note">Griglia radar ≈ 1 km <span>·</span> Tocca un punto della mappa</div>
+      <div class="legend"><div class="legend-heading"><strong>Pioggia accumulata</strong><span>mm</span></div><div class="ramp"></div><div class="legend-values"><span>0</span><span>10</span><span>25</span><span>50</span><span>100+</span></div><p>Trasparente = recente · Opaca = 8–10 giorni</p><p class="quality-key">Grigio = dati assenti o copertura sotto il 90%</p></div>
+      <button id="home" class="map-home" aria-label="Centra la mappa su Sassello">⌖ Sassello</button>
+    </section>
+    <aside>
+      <div class="eyebrow">IL PUNTO SELEZIONATO</div>
+      <div class="point-heading"><h2 id="point-name">Sassello</h2><span id="point-id">CENTRO</span></div>
+      <p id="coords" class="coords">44.47917 N · 8.48736 E</p>
+      <div class="rain-total"><span id="total">—</span><span class="unit">mm</span></div>
+      <p id="total-caption">negli ultimi 10 giorni</p>
+      <div id="status" class="status" role="status" aria-live="polite">Caricamento delle misure…</div>
+      <dl class="metrics">
+        <div><dt>Età media della pioggia</dt><dd id="mean-age">—</dd></div>
+        <div><dt>Ultima ora con almeno 1 mm</dt><dd id="last-rain">—</dd></div>
+        <div><dt>Temperatura più recente</dt><dd id="temperature">—</dd></div>
+        <div><dt>Copertura del periodo</dt><dd id="coverage">—</dd></div>
+        <div><dt>Sequenza piovosa più lunga¹</dt><dd id="rain-streak">—</dd></div>
+      </dl>
+      <section class="chart-section"><h3>Pioggia giorno per giorno <span>mm</span></h3><div id="rain-chart" class="chart" aria-label="Pioggia negli ultimi dieci intervalli di 24 ore"></div><p id="rain-chart-note" class="chart-note">Intervalli di 24 ore · colonna tratteggiata = intervallo incompleto</p><p class="chart-note">¹ Almeno 1 mm ogni 24 ore, solo intervalli completi nei 10 giorni.</p></section>
+      <section class="chart-section"><h3>Temperatura media <span>°C</span></h3><div id="temp-chart" class="temp-chart"></div><p class="chart-note">Stima DPC da stazioni, su griglia di circa 2 km.</p></section>
+      <details class="history"><summary>Archivio ogni 10 giorni</summary><label for="snapshot">Periodo conservato</label><select id="snapshot"><option value="">Mappa attuale</option></select><p id="snapshot-note">Il primo riepilogo viene salvato dopo 10 giorni di raccolta.</p><button id="export" type="button" disabled>Scarica dati del punto · CSV</button></details>
+      <details class="reading"><summary>Come leggere la mappa</summary><p>Il colore indica la quantità misurata; la trasparenza indica l’età media, pesata per i millimetri. Un temporale abbondante pesa più di una pioggia lieve.</p><p>La pioggia recente ha il 90% di trasparenza, quella di 8–10 giorni il 5%. La pioggia più vecchia esce dalla mappa operativa e resta nell’archivio.</p><p>Le celle grigie hanno dati assenti o incompleti. Il totale parziale non dimostra che abbia piovuto poco. Le misure radar sono stime e non garantiscono la presenza di porcini.</p></details>
+    </aside>
+  </main>
+  <footer><span id="updated">In attesa del primo aggiornamento</span><span>Dati <a href="https://radar.protezionecivile.it/" target="_blank" rel="noopener">Radar-DPC</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a></span></footer>
+  <noscript>Per consultare la mappa è necessario attivare JavaScript.</noscript>
+</body>
+</html>

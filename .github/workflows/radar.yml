@@ -1,0 +1,115 @@
+name: Radar Sassello · raccolta oraria
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - 'dist/**'
+      - 'requirements.txt'
+      - '.github/workflows/radar.yml'
+
+concurrency:
+  group: radar-sassello
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Installa strumenti geospaziali
+        run: python -m pip install -r requirements.txt
+      - name: Verifica cumulate e dati mancanti
+        run: python -m unittest discover -s tests -v
+      - name: Acquisisci ore radar e temperature
+        id: collect
+        continue-on-error: true
+        run: python scripts/collect.py
+      - name: Conserva lo storico anche in caso di errore della fonte
+        if: always() && steps.collect.outcome != 'skipped'
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for path in archive dist/data; do
+            if [ -d "$path" ]; then git add "$path"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'Aggiorna archivio radar Sassello'
+            for attempt in 1 2 3; do
+              git pull --rebase origin main
+              if git push origin HEAD:main; then exit 0; fi
+            done
+            exit 1
+          fi
+      - name: Salva mappa scaricabile
+        if: always() && steps.collect.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-sassello-mappa
+          path: dist/
+          retention-days: 30
+      - name: Segnala dati in ritardo
+        if: steps.collect.outcome == 'failure'
+        run: |
+          echo '::error::Raccolta incompleta o dati in ritardo. Lo storico disponibile è stato conservato.'
+          exit 1
+
+  publish:
+    needs: collect
+    if: always() && needs.collect.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Verifica attivazione GitHub Pages
+        id: pages
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const {data} = await github.rest.repos.getPages(context.repo);
+              core.setOutput('enabled', data.build_type === 'workflow' ? 'true' : 'false');
+              if (data.build_type !== 'workflow') core.notice('In Settings > Pages selezionare GitHub Actions come Source.');
+            } catch (error) {
+              if ([403,404].includes(error.status)) {
+                core.setOutput('enabled', 'false');
+                core.notice('Raccolta indipendente da Pages. Per la mappa online: Settings > Pages > Source > GitHub Actions.');
+              } else throw error;
+            }
+      - uses: actions/checkout@v4
+        if: steps.pages.outputs.enabled == 'true'
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+        if: steps.pages.outputs.enabled == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.enabled == 'true'
+        with:
+          path: dist
+      - name: Pubblica mappa aggiornata
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/deploy-pages@v4
