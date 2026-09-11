@@ -1,6 +1,6 @@
 # Radar Sassello
 
-Mappa delle precipitazioni entro **25 km da Sassello** (44.47917 N, 8.48736 E), basata sul radar della Protezione Civile. La raccolta gira su **GitHub Actions ogni ora**, anche con telefono e computer spenti.
+Mappa delle precipitazioni entro **10 km da Sassello** (44.47917 N, 8.48736 E), basata sul radar della Protezione Civile. La raccolta dell’acqua gira su **GitHub Actions ogni 5 minuti**, anche con telefono e computer spenti.
 
 ## Consultazione
 
@@ -18,16 +18,16 @@ La copia privata ospitata in ChatGPT prova a leggere i dati dal sito Pages; finc
 
 - **Colore:** scala fissa 0, 10, 25, 50, 100+ mm, dal giallo al blu scuro.
 - **Età:** media pesata per i millimetri, riferita al centro degli intervalli orari. Trasparenza 90% per pioggia appena caduta, decrescente fino al 5% a 8 giorni; resta al 5% fino a 10 giorni. L'età non è una previsione della nascita dei porcini.
-- **Periodo:** ultime 24 ore, 3 giorni o 10 giorni, su finestre orarie UTC.
+- **Periodo:** 14 giorni selezionabili, con gli ultimi 7 accesi all’apertura. La sommatoria è una vista separata richiamabile con un pulsante.
 - **Qualità:** celle grigie quando manca oltre il 10% delle ore. Nella scheda il totale è dichiarato parziale e la copertura è espressa in ore; zero osservato e dato assente restano distinti.
 - **Dettaglio:** toccare una cella per coordinate, cumulata, età media, ultima ora con almeno 1 mm, temperatura e grafici giornalieri. Esportazione CSV con campi vuoti nelle ore mancanti.
-- **Storico:** dati orari conservati in `archive/`; riepilogo non sovrapposto ogni dieci giorni in `dist/data/snapshots/`. La mappa operativa esclude gli intervalli oltre dieci giorni.
+- **Storico:** dati orari conservati in `archive/`; campioni SRI a cinque minuti conservati separatamente. La mappa operativa conserva fino a 14 giorni e lo storico può arrivare a 40 giorni.
 
 ## Raccolta e accuratezza
 
-Il prodotto **SRT1** è la pioggia cumulata nell'ora precedente, aggiornata ogni 5 minuti. Il programma scarica soltanto campioni alle **ore UTC esatte** (es. 12:00, 13:00), per sommare intervalli non sovrapposti. Non somma l'ultimo prodotto restituito a ogni esecuzione, che potrebbe creare doppi conteggi. Recupera le ore mancanti ancora disponibili entro le ultime 24 ore; le ore non recuperabili restano mancanti. Non sostituisce SRT1 con CUM24, che ha origine e caratteristiche diverse.
+Il prodotto **SRT1** è la pioggia cumulata nell'ora precedente, aggiornato ogni 5 minuti. Il programma conserva una sola misura per ciascuna ora per costruire i totali senza doppio conteggio. Il prodotto **SRI** è l’intensità in mm/h aggiornata ogni 5 minuti: viene conservato separatamente per il grafico dei rovesci e non viene sommato a SRT1. Recupera le ore mancanti ancora disponibili; le ore non recuperabili restano mancanti.
 
-La griglia mantiene i pixel radar nativi da circa **1 km** e la loro geometria, senza inventare dettaglio a 100 m. Dati negativi, non finiti o fuori dall'intervallo 0–500 mm/ora vengono marcati mancanti. La temperatura `TEMP` è interpolata da stazioni su una griglia di circa 2 km: campionarla sulla griglia radar non ne aumenta l'accuratezza.
+La griglia mantiene i pixel radar nativi da circa **1 km** entro il raggio di 10 km, senza inventare dettaglio a 100 m. Dati negativi, non finiti o fuori dall'intervallo 0–500 vengono marcati mancanti. La temperatura `TEMP` e il modello solare sono riportati sulle celle radar ma non acquistano una precisione territoriale maggiore.
 
 Al primo avvio si tenta il recupero delle ultime 24 ore, non di dieci giorni già trascorsi. La finestra completa cresce con la raccolta. Ritardi o interruzioni della fonte/Actions sono visibili come buchi e indicazione di dati in ritardo. Le run sono pianificate al minuto 17; GitHub può ritardarle o saltarle sotto carico. Le pianificazioni dei repository pubblici possono essere disabilitate dopo 60 giorni senza attività. Nessuna continuità assoluta è garantita.
 

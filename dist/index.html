@@ -1,53 +1,35 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#203f36">
-  <meta name="description" content="Pioggia misurata dal radar attorno a Sassello: cumulate, età della pioggia e temperature, con archivio automatico.">
-  <title>Radar Sassello · Pioggia nel territorio</title>
-  <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="style.css">
-  <script defer src="vendor/leaflet.js"></script>
-  <script defer src="app.js"></script>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#203f36"><title>Radar Sassello · pioggia e boschi</title>
+  <link rel="stylesheet" href="vendor/leaflet.css"><link rel="stylesheet" href="style.css">
+  <script defer src="vendor/leaflet.js"></script><script defer src="app.js"></script>
 </head>
 <body>
-  <header>
-    <div class="identity"><span class="mark" aria-hidden="true">RS</span><div><h1>Radar Sassello</h1><p>OSSERVATORIO DELLA PIOGGIA</p></div></div>
-    <div class="header-meta"><span class="tag">SASSELLO + 25 KM</span><button id="refresh" type="button">Aggiorna ↻</button></div>
-  </header>
-  <main>
-    <section class="map-workspace" aria-label="Mappa della pioggia">
-      <div class="toolbar">
-        <div class="periods" role="group" aria-label="Periodo di accumulo"><button data-hours="24" aria-pressed="false">24 ore</button><button data-hours="72" aria-pressed="false">3 giorni</button><button class="active" data-hours="240" aria-pressed="true">10 giorni</button></div>
-        <label class="age-toggle"><input id="age" type="checkbox" checked> Mostra età della pioggia</label>
-      </div>
-      <div id="map" aria-label="Mappa interattiva: tocca una cella per i dettagli"></div>
-      <div class="map-note">Griglia radar ≈ 1 km <span>·</span> Tocca un punto della mappa</div>
-      <div class="legend"><div class="legend-heading"><strong>Pioggia accumulata</strong><span>mm</span></div><div class="ramp"></div><div class="legend-values"><span>0</span><span>10</span><span>25</span><span>50</span><span>100+</span></div><p>Trasparente = recente · Opaca = 8–10 giorni</p><p class="quality-key">Grigio = dati assenti o copertura sotto il 90%</p></div>
-      <button id="home" class="map-home" aria-label="Centra la mappa su Sassello">⌖ Sassello</button>
-    </section>
-    <aside>
-      <div class="eyebrow">IL PUNTO SELEZIONATO</div>
-      <div class="point-heading"><h2 id="point-name">Sassello</h2><span id="point-id">CENTRO</span></div>
-      <p id="coords" class="coords">44.47917 N · 8.48736 E</p>
-      <div class="rain-total"><span id="total">—</span><span class="unit">mm</span></div>
-      <p id="total-caption">negli ultimi 10 giorni</p>
-      <div id="status" class="status" role="status" aria-live="polite">Caricamento delle misure…</div>
-      <dl class="metrics">
-        <div><dt>Età media della pioggia</dt><dd id="mean-age">—</dd></div>
-        <div><dt>Ultima ora con almeno 1 mm</dt><dd id="last-rain">—</dd></div>
-        <div><dt>Temperatura più recente</dt><dd id="temperature">—</dd></div>
-        <div><dt>Copertura del periodo</dt><dd id="coverage">—</dd></div>
-        <div><dt>Sequenza piovosa più lunga¹</dt><dd id="rain-streak">—</dd></div>
-      </dl>
-      <section class="chart-section"><h3>Pioggia giorno per giorno <span>mm</span></h3><div id="rain-chart" class="chart" aria-label="Pioggia negli ultimi dieci intervalli di 24 ore"></div><p id="rain-chart-note" class="chart-note">Intervalli di 24 ore · colonna tratteggiata = intervallo incompleto</p><p class="chart-note">¹ Almeno 1 mm ogni 24 ore, solo intervalli completi nei 10 giorni.</p></section>
-      <section class="chart-section"><h3>Temperatura media <span>°C</span></h3><div id="temp-chart" class="temp-chart"></div><p class="chart-note">Stima DPC da stazioni, su griglia di circa 2 km.</p></section>
-      <details class="history"><summary>Archivio ogni 10 giorni</summary><label for="snapshot">Periodo conservato</label><select id="snapshot"><option value="">Mappa attuale</option></select><p id="snapshot-note">Il primo riepilogo viene salvato dopo 10 giorni di raccolta.</p><button id="export" type="button" disabled>Scarica dati del punto · CSV</button></details>
-      <details class="reading"><summary>Come leggere la mappa</summary><p>Il colore indica la quantità misurata; la trasparenza indica l’età media, pesata per i millimetri. Un temporale abbondante pesa più di una pioggia lieve.</p><p>La pioggia recente ha il 90% di trasparenza, quella di 8–10 giorni il 5%. La pioggia più vecchia esce dalla mappa operativa e resta nell’archivio.</p><p>Le celle grigie hanno dati assenti o incompleti. Il totale parziale non dimostra che abbia piovuto poco. Le misure radar sono stime e non garantiscono la presenza di porcini.</p></details>
-    </aside>
-  </main>
-  <footer><span id="updated">In attesa del primo aggiornamento</span><span>Dati <a href="https://radar.protezionecivile.it/" target="_blank" rel="noopener">Radar-DPC</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a></span></footer>
-  <noscript>Per consultare la mappa è necessario attivare JavaScript.</noscript>
-</body>
-</html>
+<header><div class="identity"><span class="mark">RS</span><div><h1>Radar Sassello</h1><p>PIOGGIA · SOLE · BOSCHI</p></div></div><div class="header-meta"><span class="tag">RAGGIO 10 KM</span><button id="refresh" type="button">Aggiorna</button></div></header>
+<main>
+<section class="map-workspace" aria-label="Mappa interattiva">
+  <div class="toolbar">
+    <button id="sum" type="button" aria-pressed="false">Sommatoria dei giorni accesi</button>
+    <button id="pencil" type="button" aria-pressed="false">✎ Disegna bosco</button>
+    <details class="map-options"><summary>Opzioni mappa</summary>
+      <label>Ordine layer<select id="order"><option value="new">Più recente sopra</option><option value="old">Più vecchio sopra</option></select></label>
+      <label><input id="different" type="checkbox"> Differenzia layer · tre colori</label>
+      <label><input id="solar" type="checkbox"> Irradiazione solare</label>
+      <label><input id="aspect" type="checkbox"> Esposizione versanti</label>
+      <label>Trasparenza livelli<input id="overlay-opacity" type="range" min="0.1" max="0.8" value="0.4" step="0.05"></label>
+      <label>Scala quantità<select id="scale"><option value="auto">Automatica · minimo–massimo</option><option value="fixed">Fissa · 0–100 mm</option></select></label>
+    </details>
+  </div>
+  <div id="map"></div>
+  <div id="draw-help" hidden>Fai clic per aggiungere i vertici. <button id="finish-draw" type="button">Chiudi perimetro</button><button id="cancel-draw" type="button">Annulla</button></div>
+  <div class="map-note" id="map-note">Griglia pioggia nativa ≈ 1 km · clicca una cella</div>
+</section>
+<section class="timeline-panel"><div class="timeline-heading"><strong>Giorni della pioggia</strong><span id="selection-count"></span><button id="week" type="button">Ultimi 7</button><button id="all" type="button">Tutti</button><button id="none" type="button">Nessuno</button></div><div id="days" class="days" role="group" aria-label="Selezione dei giorni"></div><div class="scale-row"><span id="scale-min">0 mm</span><span id="ramp" class="ramp"></span><span id="scale-max">—</span><span id="quality">SRT1 = cumulata oraria · SRI = intensità ogni 5 minuti</span></div><p id="overlay-legend" aria-live="polite"></p></section>
+<aside id="detail"><div class="point-heading"><h2 id="point-name">Sassello</h2><span id="point-id">CELLA</span></div><div class="coordinate-row"><span id="coords">—</span><button id="copy" type="button">Copia coordinate</button></div><div class="total-row"><strong id="total">—</strong><span>mm nei giorni accesi</span><span id="peak"></span></div><p id="status" role="status">Caricamento delle misure…</p><div class="detail-tools"><label>Giorno da esaminare<select id="detail-day"></select></label><button id="export" type="button">Scarica CSV</button></div>
+<div class="charts"><section><h3>Pioggia giornaliera <span>mm · clicca una barra</span></h3><div id="daily-chart"></div></section><section><h3>Formazione della sommatoria <span>mm</span></h3><div id="cumulative-chart"></div></section><section><h3>Rovesci nelle 24 ore <span>mm/h</span></h3><div id="hourly-chart"></div><p class="chart-note">Orari italiani: ogni barra indica l’ora di inizio dell’intervallo.</p></section><section><h3>Intensità radar a 5 minuti <span>mm/h</span></h3><div id="sri-chart"></div><p class="chart-note">Campioni SRI raccolti ogni 5 minuti; l’ora in corso può essere provvisoria.</p></section><section><h3>Irraggiamento giornaliero <span>kWh/m²</span></h3><div id="solar-chart"></div></section><section><h3>Irraggiamento nelle 24 ore <span>W/m²</span></h3><div id="solar-hourly-chart"></div></section><section><h3>Sole dopo la pioggia <span>kWh/m² cumulati</span></h3><div id="after-chart"></div></section><section><h3>Temperatura aria <span>°C</span></h3><div id="temperature-chart"></div></section><section><h3>Temperatura suolo <span>°C</span></h3><div id="soil-temp-chart"></div></section><section><h3>Umidità suolo <span>m³/m³</span></h3><div id="soil-moisture-chart"></div></section><section><h3>Umidità aria <span>%</span></h3><div id="humidity-chart"></div></section><section><h3>Vento <span>km/h</span></h3><div id="wind-chart"></div></section><section><h3>Copertura nuvolosa <span>%</span></h3><div id="cloud-chart"></div></section><section><h3>Evapotraspirazione <span>mm</span></h3><div id="et-chart"></div></section></div>
+<details><summary>Boschi segnati su questo dispositivo</summary><p>I perimetri sono ancorati alle coordinate e seguono ogni zoom. Il salvataggio è locale a questo browser.</p><button id="clear-woods" type="button">Cancella tutti i perimetri</button><div id="woods"></div></details>
+<details><summary>Fonti e risoluzioni</summary><p id="sources">Pioggia: Radar-DPC, celle native circa 1 km. SRT1 è la cumulata nell’ultima ora; SRI è intensità in mm/h aggiornata ogni 5 minuti. I campioni SRI non vengono sommati a SRT1.</p><p>Temperatura DPC: circa 2 km. Sole e variabili Open-Meteo: campionamento circa 4 km, riportato sulle celle radar; risoluzione effettiva variabile secondo il modello, senza creare dettaglio artificiale. Energia solare in kWh/m²; copertura nuvolosa in percentuale.</p><p>Versanti: orientamento del terreno con massimo a sud; pianura con valore intermedio; orientamento stimato alla scala della griglia radar. È un livello geometrico, non un indice automatico di presenza dei funghi.</p><p>14 giorni selezionabili, inizialmente 7 accesi. Storico operativo massimo 40 giorni. La raccolta dell’acqua gira ogni 5 minuti, compatibilmente con la disponibilità della fonte e dei job.</p></details></aside>
+</main><footer><span id="updated">Caricamento…</span><span>Dati <a href="https://radar.protezionecivile.it/" target="_blank" rel="noopener">Radar-DPC</a> · CC BY-SA 4.0 · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · cartografia © OpenStreetMap</span></footer><noscript>Attiva JavaScript per consultare la mappa.</noscript>
+</body></html>

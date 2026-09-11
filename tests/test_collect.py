@@ -53,4 +53,33 @@ class RainfallAccounting(unittest.TestCase):
             self.assertEqual(c.read_json(c.sample_path(root,now['time'])),now)
 
 
+class OptionalLayers(unittest.TestCase):
+    def test_terrain_south_is_maximum_and_north_minimum(self):
+        from unittest.mock import Mock
+        grid = {'width':3,'height':3,'active':[False]*4+[True]+[False]*4,
+                'corners': [[44-r*.01,8+col*.01] for r in range(4) for col in range(4)]}
+        for elevations, expected in [([100,100,100,50,50,50,0,0,0],1),
+                                     ([0,0,0,50,50,50,100,100,100],0)]:
+            with tempfile.TemporaryDirectory() as tmp:
+                response=Mock(); response.json.return_value={'elevation':[elevations[i] for i in [1,3,4,5,7]]}
+                client=Mock(); client.get.return_value=response
+                errors=[]; c.update_aspect(client,Path(tmp),grid,errors)
+                self.assertEqual(errors,[])
+                self.assertEqual(c.read_json(c.aspect_path(Path(tmp)))['score'][4],expected)
+
+    def test_model_returns_spatial_arrays_and_preserves_missing(self):
+        from unittest.mock import Mock
+        end=1800000000000//c.HOUR*c.HOUR
+        grid={'width':1,'height':1,'active':[True],
+              'corners':[[44,8],[44,8.01],[43.99,8],[43.99,8.01]]}
+        response=Mock(); response.json.return_value={'hourly':{'time':[end//1000], 'shortwave_radiation':[200]}}
+        client=Mock();client.get.return_value=response
+        with tempfile.TemporaryDirectory() as tmp:
+            errors=[];c.update_model(client,Path(tmp),end,errors,grid)
+            self.assertEqual(errors,[])
+            result=c.model_timeline(Path(tmp),end)
+            self.assertEqual(result[0]['solar'],[200])
+            self.assertEqual(result[0]['temperature'],[None])
+
+
 if __name__ == '__main__': unittest.main()

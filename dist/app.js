@@ -1,196 +1,54 @@
 'use strict';
-const HOUR = 3600000, DAY = 24 * HOUR;
-const PAGES_DATA = 'https://giambattistag-cloud.github.io/Radar-sassello/data/';
-const $ = id => document.getElementById(id);
-const fmt = (n, digits = 1) => n == null || !Number.isFinite(n) ? '—' : n.toLocaleString('it-IT', { maximumFractionDigits: digits });
-const date = t => new Date(t).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-let data = null, hours = 240, selected = null, polygons = [], marker = null, archived = false, fallback = false;
-let dataBase = 'data/', loadGeneration = 0;
-const map = window.L ? L.map('map', { zoomControl: false, preferCanvas: true }).setView([44.47917, 8.48736], 11) : null;
-if (map) {
-  L.control.zoom({position:'topright'}).addTo(map);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 17, crossOrigin: true
-  }).addTo(map);
-  L.control.scale({imperial:false, position:'bottomright'}).addTo(map);
-  L.circle([44.47917, 8.48736], { radius:25000, color:'#526d55', weight:1, dashArray:'5 7', fill:false, interactive:false }).addTo(map);
-} else {
-  $('status').textContent = 'La mappa non si è caricata. Riprova con una connessione attiva.';
-}
 
-function cellBounds(i) {
-  const {width:w, corners:c} = data.grid, row = Math.floor(i/w), col = i%w, a = row*(w+1)+col;
-  return [c[a], c[a+1], c[a+w+2], c[a+w+1]];
-}
-function center(i) {const b=cellBounds(i); return [(b[0][0]+b[2][0])/2,(b[0][1]+b[2][1])/2];}
-function nearest(lat, lon) {
-  let idx=null, distance=Infinity;
-  data.grid.active.forEach((active,i)=>{if(active){const c=center(i), d=(c[0]-lat)**2+((c[1]-lon)*.713)**2;if(d<distance){distance=d;idx=i;}}});
-  return idx;
-}
-function stats(i) {
-  let total=0, weighted=0, valid=0, last=null, temp=null, tempTime=null;
-  for (const r of data.timeline) {
-    if (r.time > data.windowEnd || r.time <= data.windowEnd-hours*HOUR) continue;
-    const rain=r.rain[i];
-    if(rain!=null){valid++;total+=rain;weighted+=rain*(data.windowEnd-r.time+HOUR/2)/DAY;if(rain>=1 && (last==null||r.time>last))last=r.time;}
-    const v=r.temperature?.[i];
-    if(v!=null && (tempTime==null||r.time>tempTime)){temp=v;tempTime=r.time;}
-  }
-  return { total:valid?total:null, age:total>0?weighted/total:null, valid, last, temp, tempTime };
-}
-function color(mm) {
-  const stops=[[0,[244,218,85]],[10,[173,206,122]],[25,[80,182,186]],[50,[40,124,180]],[100,[20,44,109]]];
-  for(let k=1;k<stops.length;k++) if(mm<=stops[k][0]) {
-    const [a,x]=stops[k-1],[b,y]=stops[k], f=(mm-a)/(b-a);
-    return `rgb(${x.map((v,j)=>Math.round(v+(y[j]-v)*f)).join(',')})`;
-  }
-  return '#142c6d';
-}
-function paint() {
-  if(!data||!map)return;
-  data.grid.active.forEach((active,i)=>{
-    if(!active)return;
-    const s=stats(i), complete=s.valid/hours>=.9;
-    const opacity=$('age').checked ? .10 + .85*Math.min((s.age||0)/8,1) : .78;
-    const style={color:complete?'#52685c':'#747f77',weight:.25,opacity:.3,
-      fillColor:complete?color(s.total):'#a4ada5',fillOpacity:complete?opacity:.24};
-    if(!polygons[i])polygons[i]=L.polygon(cellBounds(i),style).addTo(map).on('click',()=>select(i));
-    else polygons[i].setStyle(style);
-  });
-}
-function daySeries(i) {
-  // Ten consecutive 24-hour blocks cover exactly the operative 240-hour window.
-  const days=Array.from({length:10},(_,j)=>({start:data.windowEnd-(10-j)*DAY,rain:0,rainHours:0,tempSum:0,tempHours:0,expected:0}));
-  for(const d of days){
-    const lo=Math.max(d.start,data.windowStart),hi=Math.min(d.start+DAY,data.windowEnd);
-    d.expected=Math.max(0,(hi-lo)/HOUR);
-  }
-  for(const r of data.timeline){
-    if(r.time<=data.windowStart||r.time>data.windowEnd)continue;
-    const d=days.find(d=>r.time>d.start&&r.time<=d.start+DAY);if(!d)continue;
-    const rain=r.rain[i],temp=r.temperature?.[i];
-    if(rain!=null){d.rain+=rain;d.rainHours++;}
-    if(temp!=null){d.tempSum+=temp;d.tempHours++;}
-  }
-  return days;
-}
-function charts(i) {
-  const days=daySeries(i), max=Math.max(1,...days.map(d=>d.rain));
-  $('rain-chart').replaceChildren();$('temp-chart').replaceChildren();
-  for(const d of days){
-    const label=new Date(d.start+DAY).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',timeZone:'UTC'});
-    const wrap=document.createElement('div');wrap.className='bar-wrap';
-    wrap.title=`${label}: ${d.rainHours?fmt(d.rain)+' mm':'dati assenti'} · ${d.rainHours}/${d.expected} ore`;
-    const value=document.createElement('span');value.className='bar-value';value.textContent=d.rainHours?fmt(d.rain,0):'—';
-    const bar=document.createElement('div');bar.className='bar'+(!d.rainHours?' missing':d.rainHours<24?' partial':'');
-    bar.style.height=(d.rainHours?Math.max(2,d.rain/max*67):2)+'%';
-    const text=document.createElement('span');text.className='bar-label';text.textContent=label.slice(0,2);
-    wrap.append(value,bar,text);$('rain-chart').append(wrap);
-    const td=document.createElement('div');td.className='temp-day';td.title=`${label}: ${d.tempHours} ore disponibili`;
-    const t=document.createElement('b');t.textContent=d.tempHours?fmt(d.tempSum/d.tempHours,0)+'°':'—';
-    const l=document.createElement('small');l.textContent=label.slice(0,2);td.append(t,l);$('temp-chart').append(td);
-  }
-}
-function select(i) {
-  if(!data||!Number.isInteger(i)||!data.grid.active[i])throw Error('Cella non disponibile');
-  selected=i;const c=center(i),s=stats(i),isCenter=i===nearest(44.47917,8.48736);
-  $('point-name').textContent=isCenter?'Sassello':'Punto nel territorio';
-  $('point-id').textContent=`CELLA ${i}`;
-  $('coords').textContent=`${c[0].toFixed(5)} N · ${c[1].toFixed(5)} E`;
-  $('total').textContent=fmt(s.total);
-  $('total-caption').textContent=`${s.valid<hours?'totale parziale · ':''}${hours===24?'ultime 24 ore':hours===72?'ultimi 3 giorni':'ultimi 10 giorni'}`;
-  $('mean-age').textContent=s.age==null?'—':fmt(s.age)+' giorni';
-  $('last-rain').textContent=s.last==null?'Non rilevata':date(s.last);
-  $('temperature').textContent=s.temp==null?'—':`${fmt(s.temp)} °C · ${date(s.tempTime)}`;
-  $('coverage').textContent=`${s.valid}/${hours} ore · ${fmt(100*s.valid/hours,0)}%`;
-  let streak=0,longest=0;for(const d of daySeries(i)){streak=d.rainHours===24&&d.rain>=1?streak+1:0;longest=Math.max(longest,streak);}
-  $('rain-streak').textContent=longest+' giorni';
-  const stale=!archived && (data.latestRainTime==null||Date.now()-data.latestRainTime>3*HOUR);
-  let message=s.valid===hours?'Periodo completo per questa cella.':`Disponibili ${s.valid} ore su ${hours}: le ore mancanti non sono considerate asciutte.`;
-  if(stale)message+=' Ultimo dato radar in ritardo.';
-  if(fallback)message+=' Copia salvata: il collegamento alla mappa automatica non è ancora disponibile.';
-  if(hours===240&&s.valid>=22&&s.valid<216)message+=' Puoi già consultare la vista 24 ore.';
-  if(archived)message='Archivio storico. '+message;
-  $('status').textContent=message;$('status').classList.toggle('warning',s.valid<hours||stale||fallback);
-  if(map){
-    if(marker)marker.setLatLng(c);
-    else marker=L.marker(c,{icon:L.divIcon({className:'selected-marker',iconSize:[12,12],iconAnchor:[6,6]})}).addTo(map);
-  }
-  $('export').disabled=false;charts(i);
-  return {cell:i,latitude:c[0],longitude:c[1],rainMm:s.total,ageDays:s.age,validHours:s.valid,expectedHours:hours,lastSignificantRain:s.last,temperatureC:s.temp};
-}
-function validate(payload) {
-  if(payload?.schemaVersion!==1||!payload.grid||!Array.isArray(payload.timeline))throw Error('Formato dati non riconosciuto');
-  const g=payload.grid,n=g.width*g.height;
-  if(!Number.isInteger(n)||n<1||n>10000||g.active.length!==n||g.corners.length!==(g.width+1)*(g.height+1))throw Error('Griglia non valida');
-  if(!Number.isFinite(payload.windowEnd)||payload.windowEnd%HOUR)throw Error('Finestra non valida');
-  const seen=new Set();
-  for(const r of payload.timeline){if(!Number.isFinite(r.time)||r.time%HOUR||seen.has(r.time)||!Array.isArray(r.rain)||r.rain.length!==n)throw Error('Archivio non valido');seen.add(r.time);}
-  return payload;
-}
-async function getJSON(url) {
-  const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(12000)});
-  if(!r.ok)throw Error(`Dati non disponibili (${r.status})`);return r.json();
-}
-async function load(snapshot='') {
-  const generation=++loadGeneration;
-  $('refresh').disabled=true;
-  try {
-    let payload, nextFallback=false, base='data/';
-    const file=snapshot?`snapshots/${encodeURIComponent(snapshot)}`:'latest.json';
-    // A Sites copy can follow the automatic Pages feed once Pages is enabled.
-    if(!location.hostname.endsWith('github.io') && location.protocol!=='file:') {
-      try{payload=await getJSON(PAGES_DATA+file);base=PAGES_DATA;}
-      catch{payload=await getJSON('data/'+file);nextFallback=true;}
-    } else payload=await getJSON('data/'+file);
-    validate(payload);if(generation!==loadGeneration)return;
-    data=payload;fallback=nextFallback;dataBase=base;archived=!!snapshot;
-    polygons.forEach(p=>p?.remove());polygons=[];
-    paint();select(selected!=null&&data.grid.active[selected]?selected:nearest(44.47917,8.48736));
-    $('updated').textContent=`${archived?'Archivio':'Ultimo dato radar'}: ${data.latestRainTime?date(data.latestRainTime):'assente'} · ore italiane`;
-    $('rain-chart-note').textContent=`Intervalli di 24 ore fino alle ${new Date(data.windowEnd).toISOString().slice(11,16)} UTC · tratteggio = intervallo incompleto`;
-    try {
-      const list=await getJSON(dataBase+'snapshots.json');
-      if(generation!==loadGeneration)return;
-      const selectEl=$('snapshot');selectEl.replaceChildren(new Option('Mappa attuale',''));
-      for(const name of list.slice().reverse())if(/^\d{4}-\d{2}-\d{2}T\d{2}\.json$/.test(name))selectEl.add(new Option('Periodo fino al '+name.slice(0,10),name));
-      selectEl.value=snapshot;
-      $('snapshot-note').textContent=list.length?`${list.length} periodi conservati. Ogni file copre 10 giorni.`:'Il primo riepilogo viene salvato dopo 10 giorni di raccolta.';
-    } catch {$('snapshot-note').textContent='Elenco archivio non disponibile.';}
-  } catch(e) {
-    if(generation!==loadGeneration)return;
-    $('status').classList.add('warning');
-    $('status').textContent=data?'Aggiornamento non riuscito: restano visibili i dati precedenti.':'Le prime misure non sono ancora disponibili. La raccolta deve completare almeno un aggiornamento.';
-    $('updated').textContent='Aggiornamento non riuscito · riprova tra qualche minuto';
-  } finally {if(generation===loadGeneration)$('refresh').disabled=false;}
-}
-function setPeriod(value){
-  if(![24,72,240].includes(value))throw Error('Periodo ammesso: 24, 72 o 240 ore');
-  hours=value;document.querySelectorAll('[data-hours]').forEach(b=>{b.classList.toggle('active',Number(b.dataset.hours)===hours);b.setAttribute('aria-pressed',String(Number(b.dataset.hours)===hours));});
-  paint();if(selected!=null)select(selected);
-}
-document.querySelectorAll('[data-hours]').forEach(b=>b.addEventListener('click',()=>setPeriod(Number(b.dataset.hours))));
-$('age').addEventListener('change',paint);
-$('home').addEventListener('click',()=>{map?.setView([44.47917,8.48736],11);if(data)select(nearest(44.47917,8.48736));});
-$('refresh').addEventListener('click',()=>load($('snapshot').value));
-$('snapshot').addEventListener('change',e=>load(e.target.value));
-$('export').addEventListener('click',()=>{
-  if(!data||selected==null)return;
-  const c=center(selected), rows=['fine_intervallo_utc,latitudine,longitudine,pioggia_mm,temperatura_c'];
-  for(let t=data.windowStart+HOUR;t<=data.windowEnd;t+=HOUR){const r=data.timeline.find(r=>r.time===t);rows.push([new Date(t).toISOString(),c[0],c[1],r?.rain[selected]??'',r?.temperature?.[selected]??''].join(','));}
-  const url=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`sassello-cella-${selected}-${new Date(data.windowEnd).toISOString().slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-});
-if(document.modelContext?.registerTool){
-  const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
-  Promise.resolve(document.modelContext.registerTool({name:'select_rainfall_point',title:'Esamina un punto di pioggia',description:'Seleziona un punto entro 25 km da Sassello e mostra pioggia, età e copertura del periodo.',inputSchema:{type:'object',properties:{latitude:{type:'number'},longitude:{type:'number'},hours:{type:'integer',enum:[24,72,240]}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){
-    if(!data)throw Error('Dati non ancora disponibili');
-    const {latitude:lat,longitude:lon,hours:h}=input||{};
-    if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.hypot((lat-44.47917)*111.2,(lon-8.48736)*79.4)>25)throw Error('Coordinate fuori dall’area di Sassello');
-    if(h!==undefined && ![24,72,240].includes(h))throw Error('Periodo non valido');
-    if(h!==undefined)setPeriod(h);const i=nearest(lat,lon);map?.panTo(center(i));return select(i);
-  }},{signal:lifecycle.signal})).catch(()=>{});
-}
-load();
-setInterval(()=>{if(!document.hidden&&!archived)load();},10*60*1000);
+const HOUR=3600000, DAY=24*HOUR;
+const CENTER=[44.47917,8.48736];
+const PAGES_DATA='https://giambattistag-cloud.github.io/Radar-sassello/data/';
+const $=id=>document.getElementById(id);
+const fmt=(n,d=1)=>n==null||!Number.isFinite(n)?'—':Number(n).toLocaleString('it-IT',{maximumFractionDigits:d});
+const localParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'});
+const localHour=new Intl.DateTimeFormat('it-IT',{timeZone:'Europe/Rome',hour:'2-digit',minute:'2-digit',hour12:false});
+const dayKey=t=>localParts.format(new Date(t));
+const dayLabel=k=>new Date(k+'T12:00:00Z').toLocaleDateString('it-IT',{timeZone:'UTC',day:'2-digit',month:'2-digit'});
+const ageLabel=a=>a===0?'oggi':'−'+a;
+
+let data=null, map=null, polygons=[], sumPolygons=[], sumLabels=[], solarPolygons=[], aspectPolygons=[];
+let selected=null, selectedPoint=null, days=[], enabled=new Set(), sumMode=false, drawMode=false, drawPoints=[], drawLine=null, drawPolygon=null;
+let woodLayers=[],rainCache=new Map(),solarCache=new Map();
+let dataBase='data/';
+
+function getMap(){return map;}
+function cellBounds(i){const w=data.grid.width,c=data.grid.corners,row=Math.floor(i/w),col=i%w,a=row*(w+1)+col;return [c[a],c[a+1],c[a+w+2],c[a+w+1]];}
+function center(i){const b=cellBounds(i);return [(b[0][0]+b[2][0])/2,(b[0][1]+b[2][1])/2];}
+function nearest(lat,lon){let pick=null,best=Infinity;data.grid.active.forEach((ok,i)=>{if(!ok)return;const c=center(i),d=(c[0]-lat)**2+((c[1]-lon)*.714)**2;if(d<best){best=d;pick=i;}});return pick;}
+function localDays(){const newest=dayKey(data.windowEnd);const ds=[];for(let age=0;age<14;age++){const noon=new Date(newest+'T12:00:00Z').getTime()-age*DAY;const key=dayKey(noon);ds.push({age,key,label:dayLabel(key)});}return ds;}
+function limitRadius(){const rad=Math.PI/180;data.grid.active=data.grid.active.map((ok,i)=>{if(!ok)return false;const c=center(i),dlat=(c[0]-CENTER[0])*rad,dlon=(c[1]-CENTER[1])*rad,a=Math.sin(dlat/2)**2+Math.cos(CENTER[0]*rad)*Math.cos(c[0]*rad)*Math.sin(dlon/2)**2;return 6371000*2*Math.asin(Math.sqrt(a))<=10000;});data.radiusKm=10;}
+function rainForDay(i,d){const key=i+':'+d.key;if(rainCache.has(key))return rainCache.get(key);let total=0,count=0;for(const r of data.timeline||[]){if((r.day||dayKey(r.time-1))!==d.key)continue;const v=r.rain?.[i];if(Number.isFinite(v)){total+=v;count++;}}const result={total,count};rainCache.set(key,result);return result;}
+function modelRecords(){return data.modelTimeline||[];}
+function solarForDay(i,d){const key=i+':'+d.key;if(solarCache.has(key))return solarCache.get(key);let total=0,count=0;for(const r of modelRecords()){if((r.day||dayKey(r.time-1))!==d.key)continue;const v=Number.isFinite(r.solar)?r.solar:(Array.isArray(r.solar)?r.solar[i]:null);if(Number.isFinite(v)){total+=v;count++;}}const result={total:total/1000,count};solarCache.set(key,result);return result;}
+function selectedTotals(i){return days.map(d=>rainForDay(i,d));}
+function totalsForSelection(){const values=[],maxes=[];data.grid.active.forEach((ok,i)=>{if(!ok)return;let total=0,peak=null,peakMm=-1;for(const d of days){if(!enabled.has(d.age))continue;const x=rainForDay(i,d);total+=x.total;if(x.total>peakMm||(x.total===peakMm&&x.total>0&&d.age<peak)){peakMm=x.total;peak=d.age;}}if(total>0)values.push({i,total,peak,peakMm});});return {values,min:Math.min(...values.map(v=>v.total),0),max:Math.max(...values.map(v=>v.total),0)};}
+function rainColor(v,max,age,diff){const t=max>0?Math.max(0,Math.min(1,v/max)):0;const hue=diff?[12,165,232][age%3]:45+(13-age)*13;return 'hsl('+hue+' '+(diff?78:72)+'% '+(88-48*t)+'%)';}
+function sumColor(v,min,max){const t=max>min?(v-min)/(max-min):1;return 'hsl('+(213-25*t)+' '+(70+20*t)+'% '+(88-58*t)+'%)';}
+function clearLayers(arr){arr.forEach(x=>{if(Array.isArray(x))x.forEach(y=>y?.remove());else x?.remove();});}
+function makeMap(){if(!window.L)return;map=L.map('map',{zoomControl:false,preferCanvas:true}).setView(CENTER,12);L.control.zoom({position:'topright'}).addTo(map);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:17}).addTo(map);L.control.scale({imperial:false}).addTo(map);L.circle(CENTER,{radius:10000,color:'#526d55',weight:1,dashArray:'5 7',fill:false,interactive:false}).addTo(map);map.on('click',e=>{if(drawMode){drawPoints.push([e.latlng.lat,e.latlng.lng]);redrawDraft();return;}const i=nearest(e.latlng.lat,e.latlng.lng);if(i!=null)selectCell(i,[e.latlng.lat,e.latlng.lng]);});}
+function buildDays(){const first=days.length===0;const selectedKeys=new Set(days.filter(d=>enabled.has(d.age)).map(d=>d.key));days=localDays();enabled=new Set(days.filter(d=>first?d.age<7:selectedKeys.has(d.key)).map(d=>d.age));const el=$('days');el.replaceChildren();for(const d of days){const b=document.createElement('button');b.type='button';b.className='day-button';b.dataset.age=d.age;b.setAttribute('aria-pressed',enabled.has(d.age));b.innerHTML='<span class="swatch"></span><small>'+ageLabel(d.age)+'</small><small>'+d.label+'</small>';b.onclick=()=>{enabled.has(d.age)?enabled.delete(d.age):enabled.add(d.age);render();};el.append(b);}renderDaySelect();}
+function renderDaySelect(){const sel=$('detail-day');const old=sel.value;sel.replaceChildren();for(const d of days){const o=new Option((d.age===0?'Oggi · ': '−'+d.age+' giorni · ')+d.label,d.key);sel.add(o);}sel.value=old&&days.some(d=>d.key===old)?old:days[0]?.key||'';}
+function render(){if(!data)return;const values=totalsForSelection(),diff=$('different').checked;document.querySelectorAll('.day-button').forEach(b=>{const d=days.find(x=>x.age===+b.dataset.age);b.setAttribute('aria-pressed',enabled.has(d.age));const vals=[];data.grid.active.forEach((ok,i)=>{if(ok)vals.push(rainForDay(i,d).total);});const mx=Math.max(...vals,0);b.querySelector('.swatch').style.background=rainColor(mx,mx,d.age,diff);});$('selection-count').textContent=enabled.size+' giorni accesi su 14';$('scale-min').textContent=sumMode?fmt(values.min)+' mm':'0 mm';$('scale-max').textContent=sumMode?fmt(values.max)+' mm':'scala giornaliera';$('ramp').style.background=sumMode?'linear-gradient(90deg,#e2ebf7,#164a91)':'linear-gradient(90deg,hsl(45 72% 88%),hsl(210 72% 40%))';$('sum').setAttribute('aria-pressed',sumMode);$('sum').textContent=sumMode?'Torna ai layer giornalieri':'Sommatoria dei giorni accesi';if(map)paint();if(selected!=null)renderDetails();}
+function paint(){clearLayers(polygons);clearLayers(sumPolygons);clearLayers(sumLabels);clearLayers(solarPolygons);clearLayers(aspectPolygons);polygons=[];sumPolygons=[];sumLabels=[];solarPolygons=[];aspectPolygons=[];const opacity=+$('overlay-opacity').value;const diff=$('different').checked;const order=$('order').value;const ordered=days.slice().sort((a,b)=>order==='new'?b.age-a.age:a.age-b.age);if(!sumMode){for(const d of ordered){if(!enabled.has(d.age))continue;let max=0;data.grid.active.forEach((ok,i)=>{if(ok)max=Math.max(max,rainForDay(i,d).total);});const layer=[];data.grid.active.forEach((ok,i)=>{if(!ok)return;const val=rainForDay(i,d).total;const style={color:'#557067',weight:.25,opacity:.35,fillColor:rainColor(val,max,d.age,diff),fillOpacity:val>0?.15+.64*(max?val/max:0):0};const p=L.polygon(cellBounds(i),style).addTo(map).on('click',e=>{L.DomEvent.stopPropagation(e);if(drawMode){drawPoints.push([e.latlng.lat,e.latlng.lng]);redrawDraft();return;}selectCell(i,[e.latlng.lat,e.latlng.lng]);});layer[i]=p;});polygons[d.age]=layer;}}else{const t=totalsForSelection();for(const v of t.values){const p=L.polygon(cellBounds(v.i),{color:'#355b8a',weight:.35,opacity:.5,fillColor:sumColor(v.total,t.min,t.max),fillOpacity:v.total>0?.18+.65*(t.max>t.min?(v.total-t.min)/(t.max-t.min):1):0}).addTo(map).on('click',e=>{L.DomEvent.stopPropagation(e);if(drawMode){drawPoints.push([e.latlng.lat,e.latlng.lng]);redrawDraft();return;}selectCell(v.i,[e.latlng.lat,e.latlng.lng]);});sumPolygons[v.i]=p;const txt=v.peak==null?'':(v.peak>=8&&v.peak<=12?'<strong>−'+v.peak+'</strong>':'−'+v.peak);if(txt)sumLabels[v.i]=L.marker(center(v.i),{interactive:false,icon:L.divIcon({className:'layer-label',html:txt,iconSize:[40,22],iconAnchor:[20,11]})}).addTo(map);}}paintOverlays(opacity);}
+function paintOverlays(opacity){const notes=[];if($('solar').checked){const solarTotal=i=>days.reduce((s,d)=>enabled.has(d.age)?s+solarForDay(i,d).total:s,0);const vals=[];data.grid.active.forEach((ok,i)=>{if(ok)vals.push(solarTotal(i));});const mx=Math.max(...vals,0);data.grid.active.forEach((ok,i)=>{if(!ok)return;const v=solarTotal(i);if(!v)return;solarPolygons[i]=L.polygon(cellBounds(i),{color:'#a46a13',weight:.35,fillColor:'#f6b73c',interactive:false,fillOpacity:opacity*(.2+.6*(mx?v/mx:0))}).addTo(map);});if(!modelRecords().some(r=>Array.isArray(r.solar)?r.solar.some(Number.isFinite):Number.isFinite(r.solar)))notes.push('Irraggiamento non ancora disponibile.');notes.push('Irraggiamento: oro · somma dei giorni solari accesi · modello meteo campionato ogni circa 4 km e riportato sulla griglia radar; risoluzione della fonte variabile.');}if($('aspect').checked){if(!Array.isArray(data.aspect)){notes.push('Esposizione: il modello del terreno non è ancora presente nell’archivio.');}else{data.grid.active.forEach((ok,i)=>{if(!ok)return;const v=data.aspect[i];if(!Number.isFinite(v))return;aspectPolygons[i]=L.polygon(cellBounds(i),{color:'#8a3c24',weight:.35,fillColor:'hsl('+(30+v*180)+' 65% 50%)',interactive:false,fillOpacity:opacity}).addTo(map);});notes.push('Esposizione: sud = massimo · est/ovest intermedi · nord = minimo.');}}$('overlay-legend').textContent=notes.join(' ');}
+function selectCell(i,point){if(!data?.grid.active[i])return;selected=i;selectedPoint=point||center(i);const c=center(i),s=totalsForSelection(),v=s.values.find(x=>x.i===i);$('point-name').textContent=i===nearest(CENTER[0],CENTER[1])?'Sassello':'Punto nel territorio';$('point-id').textContent='CELLA '+i;$('coords').textContent=selectedPoint[0].toFixed(5)+' N · '+selectedPoint[1].toFixed(5)+' E';$('total').textContent=v?fmt(v.total):'—';$('peak').textContent=v?.peak==null?'':('massimo giornaliero '+ageLabel(v.peak));const valid=(data.timeline||[]).filter(r=>r.rain?.[i]!=null).length;$('status').textContent='Cella radar nativa. '+valid+' intervalli orari disponibili; i campioni mancanti non sono considerati asciutti.';if(map){if(!window._marker)window._marker=L.marker(selectedPoint,{icon:L.divIcon({className:'selected-marker',iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);else window._marker.setLatLng(selectedPoint);}renderDetails();}
+function recordsForDay(i,key){return (data.timeline||[]).filter(r=>dayKey(r.time-1)===key).sort((a,b)=>a.time-b.time);}
+function modelRecordsForDay(key){return modelRecords().filter(r=>dayKey(r.time-1)===key).sort((a,b)=>a.time-b.time);}
+function valueOf(r,name,i){const x=r[name];return Array.isArray(x)?x[i]:Number.isFinite(x)?x:null;}
+function emptyChart(id,text){$(id).innerHTML='<p class="empty">'+text+'</p>';}
+function chart(id,vals,labels,color,click){const el=$(id);el.replaceChildren();if(!vals.length||vals.every(v=>v==null)){emptyChart(id,'dato non disponibile');return;}const w=700,h=190,left=28,bottom=34,top=12,innerW=w-left-8,innerH=h-top-bottom;const max=Math.max(...vals.map(v=>Number.isFinite(v)?v:0),0.001);const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 '+w+' '+h);svg.classList.add('chart-svg');const axis=document.createElementNS(ns,'line');axis.setAttribute('x1',left);axis.setAttribute('y1',h-bottom);axis.setAttribute('x2',w-8);axis.setAttribute('y2',h-bottom);axis.setAttribute('stroke','#aab7ac');svg.append(axis);const bw=Math.max(2,innerW/vals.length-3);vals.forEach((v,j)=>{if(v==null)return;const bar=document.createElementNS(ns,'rect');const x=left+j*innerW/vals.length+1,y=top+innerH*(1-v/max);bar.setAttribute('x',x);bar.setAttribute('y',y);bar.setAttribute('width',bw);bar.setAttribute('height',Math.max(1,h-bottom-y));bar.setAttribute('fill',color||'#4e8eaa');bar.setAttribute('rx',2);bar.classList.add('chart-hit');bar.setAttribute('tabindex','0');bar.setAttribute('aria-label',(labels[j]||'')+': '+fmt(v)+'');bar.addEventListener('click',()=>click?.(j));svg.append(bar);if(vals.length<=24||j%Math.ceil(vals.length/8)===0){const t=document.createElementNS(ns,'text');t.setAttribute('x',x+bw/2);t.setAttribute('y',h-10);t.setAttribute('text-anchor','middle');t.textContent=labels[j]||'';svg.append(t);}});const maxText=document.createElementNS(ns,'text');maxText.setAttribute('x',left);maxText.setAttribute('y',top+10);maxText.textContent=fmt(max);svg.append(maxText);el.append(svg);}
+function renderDetails(){if(selected==null||!data)return;const ds=days.map(d=>({d,v:rainForDay(selected,d),solar:solarForDay(selected,d)}));const labels=ds.map(x=>x.d.age===0?'oggi':'−'+x.d.age);chart('daily-chart',ds.map(x=>x.v.count?x.v.total:null),labels,'#3d7ea3',j=>{$('detail-day').value=ds[j].d.key;renderChartsForDay(ds[j].d.key);});let cum=0;chart('cumulative-chart',ds.slice().reverse().map(x=>{cum+=x.v.total;return x.v.count?cum:null;}),ds.slice().reverse().map(x=>x.d.age===0?'oggi':'−'+x.d.age),'#164a91');chart('solar-chart',ds.map(x=>x.solar.count?x.solar.total:null),labels,'#e19d2d');chart('after-chart',ds.map((x,j)=>{let total=0;for(let k=j-1;k>=0;k--)total+=ds[k].solar.total;return ds[j].solar.count?total:null;}),labels,'#e19d2d');chart('temperature-chart',ds.map(x=>{const rs=modelRecordsForDay(x.d.key).map(r=>valueOf(r,'temperature',selected)).filter(Number.isFinite);return rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null;}),labels,'#d56b4d');for(const id of ['soil-temp-chart','soil-moisture-chart','humidity-chart','wind-chart','cloud-chart','et-chart']){const field={"soil-temp-chart":"soilTemperature","soil-moisture-chart":"soilMoisture","humidity-chart":"humidity","wind-chart":"wind","cloud-chart":"cloud","et-chart":"et"}[id];chart(id,ds.map(x=>{const rs=modelRecordsForDay(x.d.key).map(r=>valueOf(r,field,selected)).filter(Number.isFinite);return rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null;}),labels,'#6d9a6d');}renderChartsForDay($('detail-day').value||days[0]?.key);}
+function renderChartsForDay(key){const rs=recordsForDay(selected,key);const hourly=Array.from({length:24},()=>null);for(const r of rs){const h=+new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Rome',hour:'numeric',hour12:false}).format(new Date(r.time-HOUR))%24;const v=r.rain?.[selected];if(Number.isFinite(v))hourly[h]=(hourly[h]||0)+v;}chart('hourly-chart',hourly,Array.from({length:24},(_,i)=>String(i).padStart(2,'0')),'#3d7ea3');const sri=Array.from(data.recentSri||[]).filter(r=>dayKey(r.time-1)===key).sort((a,b)=>a.time-b.time);chart('sri-chart',sri.map(r=>valueOf(r,'intensity',selected)),sri.map(r=>localHour.format(new Date(r.time))),'#4c83bb');const mr=modelRecordsForDay(key);const solar=mr.map(r=>valueOf(r,'solar',selected)).filter(Number.isFinite);chart('solar-hourly-chart',solar,mr.filter(r=>Number.isFinite(valueOf(r,'solar',selected))).map(r=>localHour.format(new Date(r.time))),'#e19d2d');}
+function renderWoods(){clearLayers(woodLayers);woodLayers=[];const woods=JSON.parse(localStorage.getItem('radarSasselloWoods')||'[]');$('woods').replaceChildren();woods.forEach((w,n)=>{const p=L.polygon(w.points,{color:'#6b3b27',fillColor:'#8a6b4c',fillOpacity:.12}).addTo(map);woodLayers.push(p);p.bindTooltip(w.name||'Bosco '+(n+1));const row=document.createElement('div');row.className='wood-row';row.innerHTML='<strong></strong><button type="button">Elimina</button>';row.querySelector('strong').textContent=w.name||'Bosco '+(n+1);row.querySelector('button').onclick=()=>{woods.splice(n,1);localStorage.setItem('radarSasselloWoods',JSON.stringify(woods));p.remove();renderWoods();};$('woods').append(row);});}
+function redrawDraft(){if(drawLine)drawLine.remove();if(drawPolygon)drawPolygon.remove();if(drawPoints.length>1)drawLine=L.polyline(drawPoints,{color:'#a85e10',weight:3,dashArray:'5 4'}).addTo(map);if(drawPoints.length>2)drawPolygon=L.polygon(drawPoints,{color:'#a85e10',fillColor:'#e8bd63',fillOpacity:.15}).addTo(map);}
+function startDraw(){drawMode=!drawMode;$('pencil').setAttribute('aria-pressed',drawMode);$('draw-help').hidden=!drawMode;map.getContainer().classList.toggle('drawing',drawMode);map.doubleClickZoom[drawMode?'disable':'enable']();if(!drawMode)cancelDraw();}
+function cancelDraw(){drawPoints=[];drawLine?.remove();drawPolygon?.remove();drawLine=drawPolygon=null;$('draw-help').hidden=true;$('pencil').setAttribute('aria-pressed','false');drawMode=false;map.getContainer().classList.remove('drawing');map.doubleClickZoom.enable();}
+function finishDraw(){if(drawPoints.length<3)return;const name=prompt('Nome del bosco (facoltativo):','Bosco');const woods=JSON.parse(localStorage.getItem('radarSasselloWoods')||'[]');woods.push({name,points:drawPoints.slice()});localStorage.setItem('radarSasselloWoods',JSON.stringify(woods));cancelDraw();renderWoods();}
+async function load(){try{let p;try{p=await (await fetch(PAGES_DATA+'latest.json',{cache:'no-store'})).json();dataBase=PAGES_DATA;}catch{p=await (await fetch('data/latest.json',{cache:'no-store'})).json();dataBase='data/';}if(!p?.grid||!Array.isArray(p.timeline))throw Error('Formato non riconosciuto');data=p;rainCache.clear();solarCache.clear();for(const r of [...(p.timeline||[]),...(p.modelTimeline||[])])r.day=dayKey(r.time-1);limitRadius();buildDays();$('updated').textContent='Ultimo archivio: '+(p.generatedAt?new Date(p.generatedAt).toLocaleString('it-IT'):'—');$('map-note').textContent='Griglia pioggia nativa ≈ '+(p.grid.resolutionM?Math.round(p.grid.resolutionM):1000)+' m · raggio 10 km';if(map&&!polygons.length)selectCell(nearest(CENTER[0],CENTER[1]),CENTER);render();renderWoods();}catch(e){$('status').textContent='Dati non disponibili; la raccolta non ha ancora prodotto un aggiornamento completo.';$('status').classList.add('warning');}}
+function setup(){makeMap();$('sum').onclick=()=>{sumMode=!sumMode;render();};$('week').onclick=()=>{enabled=new Set(days.slice(0,7).map(d=>d.age));render();};$('all').onclick=()=>{enabled=new Set(days.map(d=>d.age));render();};$('none').onclick=()=>{enabled.clear();render();};$('order').onchange=render;$('different').onchange=render;$('solar').onchange=render;$('aspect').onchange=render;$('overlay-opacity').oninput=render;$('scale').onchange=render;$('detail-day').onchange=e=>renderChartsForDay(e.target.value);$('copy').onclick=()=>navigator.clipboard?.writeText(selectedPoint[0].toFixed(6)+', '+selectedPoint[1].toFixed(6));$('clear-woods').onclick=()=>{if(!confirm('Cancellare tutti i perimetri salvati su questo dispositivo?'))return;localStorage.removeItem('radarSasselloWoods');renderWoods();};$('refresh').onclick=load;$('pencil').onclick=startDraw;$('cancel-draw').onclick=cancelDraw;$('finish-draw').onclick=finishDraw;load();}
+setup();setInterval(()=>{if(!document.hidden)load();},5*60*1000);
