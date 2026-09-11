@@ -14,6 +14,7 @@
     <button id="sum" type="button" aria-pressed="false">Sommatoria dei giorni accesi</button>
     <button id="pencil" type="button" aria-pressed="false">✎ Disegna bosco</button>
     <details class="map-options"><summary>Opzioni mappa</summary>
+      <label>Soglia per il numero del giorno (mm/giorno)<input id="rain-threshold" type="number" min="1" max="200" step="1" value="25" aria-describedby="threshold-note"></label><p id="threshold-note">Nella sommatoria il numero compare solo se almeno un giorno acceso raggiunge la soglia. Colori e quantità includono tutta la pioggia.</p>
       <label>Ordine layer<select id="order"><option value="new">Più recente sopra</option><option value="old">Più vecchio sopra</option></select></label>
       <label><input id="different" type="checkbox"> Differenzia layer · tre colori</label>
       <label><input id="solar" type="checkbox"> Irradiazione solare</label>
