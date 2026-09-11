@@ -44,7 +44,7 @@ class RainfallAccounting(unittest.TestCase):
     def test_archive_roundtrip_and_expiry(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            old={'time':self.end-240*c.HOUR,'rain':[99,99]}
+            old={'time':self.end-400*c.HOUR,'rain':[99,99]}
             now={'time':self.end,'rain':[0,None]}
             c.write_json(c.sample_path(root,old['time']),old)
             c.write_json(c.sample_path(root,now['time']),now)
